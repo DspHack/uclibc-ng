@@ -448,11 +448,18 @@ __END_DECLS
 #   if defined __UCLIBC_HAS_TLS__ \
 	       && (!defined NOT_IN_libc || defined IS_IN_libpthread)
 #    undef _res
-#    ifndef NOT_IN_libc
-#     define __resp __libc_resp
-#    endif
-#    define _res (*__resp)
+#     if defined __UCLIBC_HAS___THREAD__
+#     ifndef NOT_IN_libc
+#      define __resp __libc_resp
+#     endif
+#     define _res (*__resp)
 extern __thread struct __res_state *__resp attribute_tls_model_ie;
+#     else /* TLS without __thread support */
+#     include "libc-tsd.h"
+#     define __resp        ((struct __res_state *)__libc_tsd_address(RESP))
+#     define __resp_set(v) __libc_tsd_set(RESP, (v));
+#     define _res          (*__resp)
+#    endif
 #   endif
 #  else
 #   undef _res

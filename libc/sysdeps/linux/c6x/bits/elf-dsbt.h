@@ -60,6 +60,11 @@ struct elf32_dsbt_loadmap {
 	/* Protocol version number, must be zero.  */
 	Elf32_Half version;
 
+	/* Pointer to DSBT */
+	unsigned   *dsbt_table;
+	unsigned   dsbt_size;
+	unsigned   dsbt_index;
+
 	/* number of segments */
 	Elf32_Half nsegs;
 

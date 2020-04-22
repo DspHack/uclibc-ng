@@ -21,6 +21,7 @@ choice
 	default TARGET_arm if DESIRED_TARGET_ARCH = "arm"
 	default TARGET_avr32 if DESIRED_TARGET_ARCH = "avr32"
 	default TARGET_bfin if DESIRED_TARGET_ARCH = "bfin"
+	default TARGET_c6x if DESIRED_TARGET_ARCH = "c6x"
 	default TARGET_cris if DESIRED_TARGET_ARCH = "cris"
 	default TARGET_csky if DESIRED_TARGET_ARCH = "csky"
 	default TARGET_frv if DESIRED_TARGET_ARCH = "frv"
@@ -564,6 +565,15 @@ config UCLIBC_HAS_TLS
 	depends on UCLIBC_HAS_THREADS_NATIVE
 	help
 	  If you want to enable TLS support then answer Y.
+	  This is fast an efficient way to store per-thread local data
+	  which is not on stack. It needs TLS support enabled in ld.
+
+config UCLIBC_HAS___THREAD
+	bool "__thread Support"
+	depends on UCLIBC_HAS_TLS
+	default y
+	help
+	  If you want to enable __thread support then answer Y.
 	  This is fast an efficient way to store per-thread local data
 	  which is not on stack. It needs __thread support enabled in
 	  gcc.
@@ -1690,7 +1700,7 @@ config UCLIBC_HAS_STDIO_AUTO_RW_TRANSITION
 	  fflush function or to a file positioning function (fseek, fsetpos,
 	  or rewind), and input shall not be directly followed by output without
 	  an intervening call to a file positioning function, unless the input
-	  operation encounters end­of­file.
+	  operation encounters endï¿½ofï¿½file.
 
 	  Most people will answer Y.
 

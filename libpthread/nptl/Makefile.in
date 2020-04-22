@@ -20,6 +20,12 @@ libpthread-routines- += $(notdir $(wildcard $(libpthread_DIR)/gen_*.c)) # dummy 
 libpthread-routines- += allocatestack.c # dummy included by pthread_create.c
 libpthread-routines-$(UCLIBC_SUSV4_LEGACY) += pthread_getconcurrency.c \
 	pthread_setconcurrency.c
+
+ifneq ($(UCLIBC_HAS___THREAD),y)
+libc-shared-routines-y += libc-tsd.c
+libc-static-routines-y += libc-tsd.c
+endif
+
 libpthread_CSRC = $(filter-out $(libpthread-routines-) \
 		  		$(libc-shared-routines-y) \
 		  		$(libc-static-routines-y) \
@@ -206,3 +212,4 @@ CFLAGS-sem_open.c = -D_GNU_SOURCE
 CFLAGS-OMIT-alloca_cutoff.c = $(CFLAGS-dir_nptl)
 CFLAGS-OMIT-libc-lowlevelock.c = $(CFLAGS-dir_nptl)
 CFLAGS-OMIT-libc-cancellation.c = $(CFLAGS-dir_nptl)
+CFLAGS-OMIT-libc-tsd.c = $(CFLAGS-dir_nptl)

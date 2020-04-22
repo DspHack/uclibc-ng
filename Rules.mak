@@ -109,7 +109,8 @@ ARCH ?= $(shell uname -m | $(SED) -e s/i.86/i386/ \
 				  -e s/sh.*/sh/ \
 				  -e s/s390x/s390/ -e s/parisc.*/hppa/ \
 				  -e s/ppc.*/powerpc/ -e s/mips.*/mips/ \
-				  -e s/xtensa.*/xtensa/ )
+				  -e s/xtensa.*/xtensa/ \
+				  -e s/c6x.*/c6x/ )
 else
 ARCH = $(TARGET_ARCH)
 endif
@@ -512,8 +513,9 @@ endif
 
 ifeq ($(TARGET_ARCH),c6x)
 	PIEFLAG:=
-	CPU_CFLAGS-$(CONFIG_TMS320C64X) += -march=c64x
-	CPU_CFLAGS-$(CONFIG_TMS320C64XPLUS) += -march=c64x+
+	CPU_CFLAGS-y +=-DNO_LIBGCC_SO
+	CPU_CFLAGS-$(CONFIG_TMS320C64X) +=-march=c64x
+	CPU_CFLAGS-$(UCLIBC_HAS_FPU) +=-march=c674x
 	CPU_CFLAGS-$(ARCH_LITTLE_ENDIAN)+=-mlittle-endian
 	CPU_CFLAGS-$(ARCH_BIG_ENDIAN)+=-mbig-endian
 	CPU_LDFLAGS-y += $(CPU_CFLAGS)

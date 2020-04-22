@@ -485,6 +485,9 @@ map_writeable (int infile, ElfW(Phdr) *ppnt, int piclib, int flags,
 	map_size = (ppnt->p_vaddr + ppnt->p_filesz
 		    + ADDR_ALIGN) & PAGE_ALIGN;
 
+#ifndef MIN
+# define MIN(a,b) ((a) < (b) ? (a) : (b))
+#endif
 	_dl_memset (cpnt, 0,
 		    MIN (map_size
 			 - (ppnt->p_vaddr
@@ -783,16 +786,19 @@ struct elf_resolve *_dl_load_elf_shared_library(unsigned int rflags,
 	   back again later. */
 
 	if (dynamic_info[DT_TEXTREL]) {
+		_dl_if_debug_dprint("dynamic_info[DT_TEXTREL(%d)]=%d rtld_flags %x size %d\n",
+				    DT_TEXTREL, dynamic_info[DT_TEXTREL], rtld_flags, sizeof(ElfW(Dyn)));
 #ifndef __FORCE_SHAREABLE_TEXT_SEGMENTS__
 		ppnt = (ElfW(Phdr) *)(intptr_t) & header[epnt->e_phoff];
 		for (i = 0; i < epnt->e_phnum; i++, ppnt++) {
 			if (ppnt->p_type == PT_LOAD && !(ppnt->p_flags & PF_W)) {
-#ifdef __ARCH_USE_MMU__
+# ifdef __ARCH_USE_MMU__
 				_dl_mprotect((void *) ((piclib ? libaddr : DL_GET_LIB_OFFSET()) +
 							(ppnt->p_vaddr & PAGE_ALIGN)),
 						(ppnt->p_vaddr & ADDR_ALIGN) + (unsigned long) ppnt->p_filesz,
 						PROT_READ | PROT_WRITE | PROT_EXEC);
-#else
+# else
+#  ifndef __DSBT__ 
 				void *new_addr;
 				new_addr = map_writeable (infile, ppnt, piclib, flags, libaddr);
 				if (!new_addr) {
@@ -803,10 +809,10 @@ struct elf_resolve *_dl_load_elf_shared_library(unsigned int rflags,
 				DL_UPDATE_LOADADDR_HDR(lib_loadaddr,
 						       new_addr + (ppnt->p_vaddr & ADDR_ALIGN),
 						       ppnt);
-				/* This has invalidated all pointers into the previously readonly segment.
-				   Update any them to point into the remapped segment.  */
+				/* Update any pointers into remapped segments.  */
 				_dl_parse_dynamic_info(dpnt, dynamic_info, NULL, lib_loadaddr);
-#endif
+#  endif
+# endif
 			}
 		}
 #else
@@ -863,11 +869,19 @@ struct elf_resolve *_dl_load_elf_shared_library(unsigned int rflags,
 		{
 # ifdef __SUPPORT_LD_DEBUG_EARLY__
 			char *tmp = (char *) tpnt->l_tls_initimage;
-			tpnt->l_tls_initimage = (char *) DL_RELOC_ADDR(tpnt->loadaddr, tlsppnt->p_vaddr);
+#  ifdef __DSBT__
+			tpnt->l_tls_initimage = (char *) DL_RELOC_ADDR((unsigned int)tpnt->loadaddr.map, tlsppnt->p_vaddr);
+#  else
+ 			tpnt->l_tls_initimage = (char *) DL_RELOC_ADDR(tpnt->loadaddr, tlsppnt->p_vaddr);
+#  endif
 			_dl_debug_early("Relocated TLS initial image from %x to %x (size = %x)\n", tmp, tpnt->l_tls_initimage, tpnt->l_tls_initimage_size);
 			tmp = 0;
 # else
+#  ifdef __DSBT__
+			tpnt->l_tls_initimage = (char *) DL_RELOC_ADDR((unsigned int) tpnt->loadaddr.map, tlsppnt->p_vaddr);
+#  else
 			tpnt->l_tls_initimage = (char *) DL_RELOC_ADDR(tpnt->loadaddr, tlsppnt->p_vaddr);
+#  endif
 # endif
 		}
 	}
@@ -925,7 +939,6 @@ struct elf_resolve *_dl_load_elf_shared_library(unsigned int rflags,
 	{
 		struct elf_resolve *t, *ref;
 		int idx = tpnt->dsbt_index;
-		void **dsbt = tpnt->dsbt_table;
 
 		/*
 		 * It is okay (required actually) to have zero idx for an executable.
@@ -939,6 +952,11 @@ struct elf_resolve *_dl_load_elf_shared_library(unsigned int rflags,
 					    _dl_progname, libname);
 				_dl_exit(1);
 			}
+
+# ifdef __NR_dsbt_idx_alloc
+			/* Allocate an unique index */
+			idx = dsbt_idx_alloc(libname, 0, tpnt->loadaddr.map->dsbt_size, 0);
+# else
 			/* Find a dsbt table from another module. */
 			ref = NULL;
 			for (t = _dl_loaded_modules; t; t = t->next) {
@@ -951,6 +969,11 @@ struct elf_resolve *_dl_load_elf_shared_library(unsigned int rflags,
 			while (idx-- > 0)
 				if (!ref || ref->dsbt_table[idx] == NULL)
 					break;
+# endif
+
+			_dl_if_debug_dprint("%s: '%s' dynamically computed idx = %d\n",
+					    _dl_progname, libname, idx);
+
 			if (idx <= 0) {
 				_dl_dprintf(2, "%s: '%s' caused DSBT table overflow!\n",
 					    _dl_progname, libname);
@@ -958,38 +981,25 @@ struct elf_resolve *_dl_load_elf_shared_library(unsigned int rflags,
 			}
 			_dl_if_debug_dprint("\n\tfile='%s';  assigned index %d\n",
 					    libname, idx);
-			tpnt->dsbt_index = idx;
-		}
+			tpnt->loadaddr.map->dsbt_index = idx;
+		} else {
+# ifdef __NR_dsbt_idx_alloc
+			/* Reserve our defined index */
+			idx = dsbt_idx_alloc(libname, idx, 0, 1);
+			if (idx < 0) {
+				_dl_dprintf(2, "%s: '%s' cannot register DSBT index!\n",
+					    _dl_progname, libname);
+				_dl_exit(1);
+ 			}
+# endif
+ 		}
 
-		/* make sure index is not already used */
-		if (_dl_ldso_dsbt[idx]) {
-			struct elf_resolve *dup;
-			const char *dup_name;
-
-			for (dup = _dl_loaded_modules; dup; dup = dup->next)
-				if (dup != tpnt && dup->dsbt_index == idx)
-					break;
-			if (dup)
-				dup_name = dup->libname;
-			else if (idx == 1)
-				dup_name = "runtime linker";
-			else
-				dup_name = "unknown library";
-			_dl_dprintf(2, "%s: '%s' dsbt index %d already used by %s!\n",
-				    _dl_progname, libname, idx, dup_name);
+		/* Setup dsbt slot for this module in dsbt of all modules */
+		if (_dl_adjust_dsbt_modules(tpnt, idx))
 			_dl_exit(1);
-		}
 
-		/*
-		 * Setup dsbt slot for this module in dsbt of all modules.
-		 */
-		for (t = _dl_loaded_modules; t; t = t->next)
-			t->dsbt_table[idx] = dsbt;
-		_dl_ldso_dsbt[idx] = dsbt;
-		_dl_memcpy(dsbt, _dl_ldso_dsbt,
-			   tpnt->dsbt_size * sizeof(tpnt->dsbt_table[0]));
-	}
-#endif
+ 	}
+#endif   /* __DSBT__ */
 	_dl_if_debug_dprint("\n\tfile='%s';  generating link map\n", libname);
 	_dl_if_debug_dprint("\t\tdynamic: %x  base: %x\n", dynamic_addr, DL_LOADADDR_BASE(lib_loadaddr));
 	_dl_if_debug_dprint("\t\t  entry: %x  phdr: %x  phnum: %x\n\n",
@@ -999,6 +1009,57 @@ struct elf_resolve *_dl_load_elf_shared_library(unsigned int rflags,
 
 	return tpnt;
 }
+
+#ifdef __DSBT__
+int
+_dl_adjust_dsbt_modules(struct elf_resolve *tpnt, int idx)
+{
+	struct elf_resolve *t, *ref;
+	unsigned *dsbt = tpnt->loadaddr.map->dsbt_table;
+
+	/*
+	 * Setup dsbt slot for this module in dsbt of all modules.
+	 */
+	ref = NULL;
+	for (t = _dl_loaded_modules; t; t = t->next) {
+		/* find a dsbt table from another module */
+		if (ref == NULL && t != tpnt) {
+			ref = t;
+
+			/* make sure index is not already used */
+			if (t->loadaddr.map->dsbt_table[idx]) {
+				struct elf_resolve *dup;
+				char *dup_name;
+
+				for (dup = _dl_loaded_modules; dup; dup = dup->next)
+					if (dup != tpnt && dup->loadaddr.map->dsbt_index == idx)
+						break;
+				if (dup)
+					dup_name = dup->libname;
+				else if (idx == 1)
+					dup_name = "runtime linker";
+				else
+					dup_name = "unknown library";
+
+				_dl_dprintf(2, "%s: dsbt index %d already used by %s!\n",
+					    _dl_progname, idx, dup_name);
+				return -1;
+			}
+		}
+
+		_dl_if_debug_dprint("dsbt adjust, set %x to dsbt_table[%d] %x\n",
+				    (unsigned) dsbt, idx, &t->loadaddr.map->dsbt_table[idx]);
+
+		t->loadaddr.map->dsbt_table[idx] = (unsigned) dsbt;
+	}
+
+	if (ref)
+		_dl_memcpy(dsbt, ref->loadaddr.map->dsbt_table,
+			   tpnt->loadaddr.map->dsbt_size * sizeof(unsigned *));
+
+	return 0;
+}
+#endif
 
 /* now_flag must be RTLD_NOW or zero */
 int _dl_fixup(struct dyn_elf *rpnt, struct r_scope_elem *scope, int now_flag)

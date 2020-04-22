@@ -517,24 +517,19 @@ _dl_allocate_tls_storage (void)
   result = _dl_memalign (_dl_tls_static_align, size);
   if (__builtin_expect (result != NULL, 1))
     {
+      /* Clear all the allocated memory (TCB and remaining space).
+         Do not only clear the TCB data structure because extra TLS
+         storage is also used for NPTL thread structure */
+      _dl_memset (result, '\0', size);
+
       /* Allocate the DTV.  */
       void *allocated = result;
 
 # ifdef TLS_TCB_AT_TP
       /* The TCB follows the TLS blocks.  */
       result = (char *) result + size - TLS_TCB_SIZE;
-
-      /* Clear the TCB data structure.  We can't ask the caller (i.e.
-	 libpthread) to do it, because we will initialize the DTV et al.  */
-      _dl_memset (result, '\0', TLS_TCB_SIZE);
 # elif defined(TLS_DTV_AT_TP)
       result = (char *) result + size - _dl_tls_static_size;
-
-      /* Clear the TCB data structure and TLS_PRE_TCB_SIZE bytes before it.
-	 We can't ask the caller (i.e. libpthread) to do it, because we will
-	 initialize the DTV et al.  */
-      _dl_memset ((char *) result - TLS_PRE_TCB_SIZE, '\0',
-	      TLS_PRE_TCB_SIZE + TLS_TCB_SIZE);
 # endif
 
       result = allocate_dtv (result);
@@ -643,15 +638,17 @@ _dl_deallocate_tls (void *tcb, bool dealloc_tcb)
   dtv_t *dtv = GET_DTV (tcb);
   size_t cnt;
 
-  /* We need to free the memory allocated for non-static TLS.  */
-  for (cnt = 0; cnt < dtv[-1].counter; ++cnt)
-    if (! dtv[1 + cnt].pointer.is_static
-	&& dtv[1 + cnt].pointer.val != TLS_DTV_UNALLOCATED)
-      _dl_free (dtv[1 + cnt].pointer.val);
+  if (dtv) {
+    /* We need to free the memory allocated for non-static TLS.  */
+    for (cnt = 0; cnt < dtv[-1].counter; ++cnt)
+      if (! dtv[1 + cnt].pointer.is_static
+	  && dtv[1 + cnt].pointer.val != TLS_DTV_UNALLOCATED)
+	_dl_free (dtv[1 + cnt].pointer.val);
 
-  /* The array starts with dtv[-1].  */
-  if (dtv != _dl_initial_dtv)
-    _dl_free (dtv - 1);
+    /* The array starts with dtv[-1].  */
+    if (dtv != _dl_initial_dtv)
+      _dl_free (dtv - 1);
+  }
 
   if (dealloc_tcb)
     {

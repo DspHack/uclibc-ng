@@ -1,5 +1,5 @@
 /* libc-internal interface for thread-specific data.  Stub or TLS version.
-   Copyright (C) 1998,2001,02 Free Software Foundation, Inc.
+   Copyright (C) 1998,2001,02,12 Free Software Foundation, Inc.
    This file is part of the GNU C Library.
 
    The GNU C Library is free software; you can redistribute it and/or
@@ -58,11 +58,25 @@
 # define __libc_tsd_get(KEY)		(__libc_tsd_##KEY)
 # define __libc_tsd_set(KEY, VALUE)	(__libc_tsd_##KEY = (VALUE))
 #else
-# define __libc_tsd_define(CLASS, KEY)	CLASS void *__libc_tsd_##KEY##_data;
+#include "pthreadP.h"
 
-# define __libc_tsd_address(KEY)	(&__libc_tsd_##KEY##_data)
-# define __libc_tsd_get(KEY)		(__libc_tsd_##KEY##_data)
-# define __libc_tsd_set(KEY, VALUE)	(__libc_tsd_##KEY##_data = (VALUE))
+#define _LIBC_TSD_KEY_MALLOC     0
+#define _LIBC_TSD_KEY_DL_ERROR   1
+#define _LIBC_TSD_KEY_RPC_VARS   2
+#define _LIBC_TSD_KEY_H_ERRNO    3
+#define _LIBC_TSD_KEY_ERRNO      4
+#define _LIBC_TSD_KEY_RESP       5
+
+#define _LIBC_TSD_FIRST_FREE_KEY 6
+
+extern void* __libc_tsd_address_internal(unsigned int key);
+extern void* __libc_tsd_get_internal(unsigned int key);
+extern int   __libc_tsd_set_internal(unsigned int key, void *value);
+
+# define __libc_tsd_define(CLASS, KEY)
+# define __libc_tsd_address(KEY)        __libc_tsd_address_internal(_LIBC_TSD_KEY_##KEY)
+# define __libc_tsd_get(KEY)	        __libc_tsd_get_internal(_LIBC_TSD_KEY_##KEY)
+# define __libc_tsd_set(KEY, VALUE)     __libc_tsd_set_internal(_LIBC_TSD_KEY_##KEY, (VALUE))
 #endif
 
 #endif	/* bits/libc-tsd.h */
