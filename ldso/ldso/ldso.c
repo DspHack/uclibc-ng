@@ -675,6 +675,8 @@ of this helper program; chances are you did not intend to run this program.\n\
 			dpnt = (ElfW(Dyn) *) DL_RELOC_ADDR(app_tpnt->loadaddr, ppnt->p_vaddr);
 			_dl_parse_dynamic_info(dpnt, app_tpnt->dynamic_info, debug_addr, app_tpnt->loadaddr);
 #ifndef __FORCE_SHAREABLE_TEXT_SEGMENTS__
+# ifdef __ARCH_USE_MMU__
+
 			/* Ugly, ugly.  We need to call mprotect to change the
 			 * protection of the text pages so that we can do the
 			 * dynamic linking.  We can set the protection back
@@ -695,6 +697,7 @@ of this helper program; chances are you did not intend to run this program.\n\
 				}
 				ppnt = ppnt_outer;
 			}
+# endif
 #else
 			if (app_tpnt->dynamic_info[DT_TEXTREL]) {
 				_dl_dprintf(2, "Can't modify application's text section; use the GCC option -fPIE for position-independent executables.\n");
@@ -776,8 +779,13 @@ of this helper program; chances are you did not intend to run this program.\n\
 	if (app_tpnt->l_tls_initimage != NULL) {
 		char *tmp attribute_unused =
 			(char *) app_tpnt->l_tls_initimage;
+# ifdef __DSBT__
 		app_tpnt->l_tls_initimage =
+			(char *) DL_RELOC_ADDR((unsigned int) app_tpnt->loadaddr.map, app_tpnt->l_tls_initimage);
+# else
+ 		app_tpnt->l_tls_initimage =
 			(char *) DL_RELOC_ADDR(app_tpnt->loadaddr, app_tpnt->l_tls_initimage);
+# endif
 		_dl_debug_early("Relocated TLS initial image from %x to %x (size = %x)\n",
 			tmp, app_tpnt->l_tls_initimage, app_tpnt->l_tls_initimage_size);
 	}

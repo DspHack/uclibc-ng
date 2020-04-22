@@ -4,7 +4,9 @@
 # error "Never use <bits/syscalls.h> directly; include <sys/syscall.h> instead."
 #endif
 
-#ifndef __ASSEMBLER__
+#ifdef __ASSEMBLER__
+#define SYS_ify(syscall_name)  __NR_##syscall_name
+#else
 
 #include <errno.h>
 

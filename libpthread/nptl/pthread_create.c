@@ -226,7 +226,11 @@ start_thread (void *arg)
 
 #if defined __UCLIBC_HAS_RESOLVER_SUPPORT__
   /* Initialize resolver state pointer.  */
-  __resp = &pd->res;
++# if USE___THREAD
+   __resp = &pd->res;
++# else
++  __resp_set(&pd->res);
++# endif
 #endif
 #ifdef __NR_set_robust_list
 # ifndef __ASSUME_SET_ROBUST_LIST

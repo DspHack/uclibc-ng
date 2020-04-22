@@ -13,6 +13,10 @@ void **__libc_dl_error_tsd(void) __attribute__ ((const));
 void ** __attribute__ ((const))
 __libc_dl_error_tsd (void)
 {
-  static __thread void *__tsd_data attribute_tls_model_ie;
-  return &__tsd_data;
+#ifdef __UCLIBC_HAS___THREAD__
+   static __thread void *data __attribute__ ((tls_model ("initial-exec")));
+   return &data;
+#else
+ return (void **) __libc_tsd_address(DL_ERROR);
+#endif
 }

@@ -30,4 +30,12 @@ typedef struct {
 	unsigned long __pc;       /* the return address */
 } __jmp_buf[1];
 
-#endif
+/* the stack pointer (B15) */
+#define JP_SP 11 
+
+/* Test if longjmp to JMPBUF would unwind the frame
+   containing a local variable at ADDRESS.  */
+#define _JMPBUF_UNWINDS(jmpbuf, address) \
+  ((void *) (address) < (void *) (jmpbuf)->__regs[JP_SP])
+
+#endif  /* bits/setjmp.h */

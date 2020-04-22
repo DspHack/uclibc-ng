@@ -67,7 +67,7 @@ __END_DECLS
 # undef errno
 # define errno _dl_errno
 extern int _dl_errno; /* attribute_hidden */
-#elif defined __UCLIBC_HAS_TLS__
+#elif defined __UCLIBC_HAS___THREAD__
 # if !defined NOT_IN_libc || defined IS_IN_libpthread
 #  undef errno
 #   define errno errno             /* For #ifndef errno tests.  */

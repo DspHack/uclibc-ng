@@ -20,6 +20,12 @@
 #include "pthreadP.h"
 #include <atomic.h>
 
+#include <bits/libc-tsd.h>
+#ifdef _LIBC_TSD_FIRST_FREE_KEY
+#define PTHREAD_KEYS_MIN _LIBC_TSD_FIRST_FREE_KEY
+#else
+#define PTHREAD_KEYS_MIN 0
+#endif
 
 int
 attribute_protected
@@ -27,9 +33,9 @@ __pthread_key_create (
      pthread_key_t *key,
      void (*destr) (void *))
 {
-  /* Find a slot in __pthread_kyes which is unused.  */
+  /* Find a slot in __pthread_keys which is unused.  */
   size_t cnt;
-  for (cnt = 0; cnt < PTHREAD_KEYS_MAX; ++cnt)
+  for (cnt = PTHREAD_KEYS_MIN; cnt < PTHREAD_KEYS_MAX; ++cnt)
     {
       uintptr_t seq = __pthread_keys[cnt].seq;
 

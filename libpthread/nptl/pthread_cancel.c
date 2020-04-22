@@ -18,6 +18,7 @@
 
 #include <errno.h>
 #include <signal.h>
+#include <features.h>
 #include "pthreadP.h"
 #include "atomic.h"
 #include <sysdep.h>
@@ -36,7 +37,7 @@ pthread_cancel (
     /* Not a valid thread handle.  */
     return ESRCH;
 
-#ifdef SHARED
+#if ((defined SHARED) && (!defined NO_LIBGCC_SO))
   pthread_cancel_init ();
 #endif
   int result = 0;

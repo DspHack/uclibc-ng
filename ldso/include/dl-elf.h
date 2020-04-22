@@ -41,6 +41,9 @@ extern struct elf_resolve * _dl_load_elf_shared_library(unsigned int rflags,
 extern int _dl_linux_resolve(void);
 extern int _dl_fixup(struct dyn_elf *rpnt, struct r_scope_elem *scope, int flag);
 extern void _dl_protect_relro (struct elf_resolve *l);
+#ifdef __DSBT__
+extern int _dl_adjust_dsbt_modules(struct elf_resolve *tpnt, int idx);
+#endif
 
 /*
  * Bitsize related settings for things ElfW()

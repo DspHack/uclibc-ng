@@ -131,6 +131,8 @@ DL_START(unsigned long args)
 	ElfW(Dyn) *dpnt;
 	uint32_t  *p32;
 
+	(void) got; /* Reduce warnings on architectures that don't use got */
+
 	/* WARNING! -- we cannot make _any_ function calls until we have
 	 * taken care of fixing up our own relocations.  Making static
 	 * inline calls is ok, but _no_ function calls.  Not yet
@@ -320,6 +322,7 @@ DL_START(unsigned long args)
 						sym = &symtab[symtab_index];
 						symbol_addr = (unsigned long) DL_RELOC_ADDR(load_addr, sym->st_value);
 #if !defined(EARLY_STDERR_SPECIAL)
+						char *strtab = (char *) tpnt->dynamic_info[DT_STRTAB];
 						SEND_STDERR_DEBUG("relocating symbol: ");
 						SEND_STDERR_DEBUG(strtab + sym->st_name);
 						SEND_STDERR_DEBUG("\n");

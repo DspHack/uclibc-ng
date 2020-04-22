@@ -125,6 +125,9 @@
 /* Constants that identify the `xenix' filesystem.  */
 #define XENIX_SUPER_MAGIC	0x012ff7b4
 
+/* Constant that identifies the `ramfs' filesystem. */
+#define RAMFS_SUPER_MAGIC       0x858458f6
+
 /* Constant that identifies the `shm' filesystem.  */
 /* Mount as tmpfs.  */
 #define SHMFS_SUPER_MAGIC_WITH_MMU      0x01021994

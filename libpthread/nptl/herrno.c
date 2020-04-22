@@ -21,6 +21,7 @@
 
 #include <tls.h>
 
+#if USE___THREAD
 /* We need to have the error status variable of the resolver
    accessible in the libc.  */
 extern __thread int h_errno;
@@ -32,3 +33,7 @@ __h_errno_location (void)
 {
   return &h_errno;
 }
+#else
+extern int *
+__h_errno_location (void);
+#endif

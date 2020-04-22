@@ -451,6 +451,11 @@ _dl_allocate_tls_storage (void)
   result = _dl_memalign (GL(dl_tls_static_align), size);
   if (__builtin_expect (result != NULL, 1))
     {
+      /* Clear all the allocated memory (TCB and remaining space).
+         Do not only clear the TCB data structure because extra TLS
+         storage is also used for NPTL thread structure */
+      _dl_memset (result, '\0', size);
+
       /* Allocate the DTV.  */
       void *allocated = result;
 

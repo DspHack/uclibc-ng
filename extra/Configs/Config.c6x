@@ -11,7 +11,8 @@ config FORCE_OPTIONS_FOR_ARCH
 	default y
 	select ARCH_ANY_ENDIAN
 	select ARCH_HAS_NO_MMU
-
+	select ARCH_HAS_DEPRECATED_SYSCALLS
+	
 choice
 	prompt "Target Processor Type"
 	default CONFIG_GENERIC_C6X
@@ -24,6 +25,10 @@ config CONFIG_TMS320C64X
 
 config CONFIG_TMS320C64XPLUS
 	bool "TMS320C64X+"
+
+config CONFIG_TMS320C674X
+	bool "TMS320C674X or TMS320C66XX"
+	select UCLIBC_HAS_FPU
 
 endchoice
 

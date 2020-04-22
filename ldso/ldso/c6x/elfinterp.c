@@ -15,10 +15,18 @@
  */
 
 #include <features.h>
+#include <atomic.h>
 
 /* Program to load an ELF binary on a linux system, and run it.
    References to symbols in sharable libraries can be resolved by either
    an ELF sharable library or a linux style of shared library. */
+
+/* Disclaimer:  I have never seen any AT&T source code for SVr4, nor have
+   I ever taken any courses on internals.  This program was developed using
+   information available through the book "UNIX SYSTEM V RELEASE 4,
+   Programmers guide: Ansi C and Programming Support Tools", which did
+   a more than adequate job of explaining everything required to get this
+   working. */
 
 extern void __c6x_cache_sync(unsigned long start, unsigned long end)
     attribute_hidden;
@@ -67,6 +75,7 @@ _dl_linux_resolver (struct elf_resolve *tpnt, int reloc_entry)
 		_dl_dprintf(2, "%s: can't resolve symbol '%s' in lib '%s'.\n", _dl_progname, symname, tpnt->libname);
 		_dl_exit(1);
 	}
+
 
 #if defined (__SUPPORT_LD_DEBUG__)
 	if (_dl_debug_bindings) {
@@ -145,8 +154,8 @@ _dl_do_reloc (struct elf_resolve *tpnt,struct r_scope_elem *scope,
 	unsigned long symbol_addr, sym_val;
 	long reloc_addend;
 	unsigned long old_val, new_val = 0;
+	unsigned long dsbt_idx;
 	struct symbol_ref sym_ref;
-	struct elf_resolve *symbol_tpnt;
 
 	reloc_addr = (unsigned long *)(intptr_t)
 		DL_RELOC_ADDR (tpnt->loadaddr, rpnt->r_offset);
@@ -162,7 +171,6 @@ _dl_do_reloc (struct elf_resolve *tpnt,struct r_scope_elem *scope,
 	if (ELF_ST_BIND (symtab[symtab_index].st_info) == STB_LOCAL) {
 		symbol_addr = (unsigned long)
 			DL_RELOC_ADDR (tpnt->loadaddr, symtab[symtab_index].st_value);
-		symbol_tpnt = tpnt;
 	} else {
 		symbol_addr = (unsigned long) _dl_find_hash(symname,
 							    scope, NULL, elf_machine_type_class(reloc_type),
@@ -178,7 +186,6 @@ _dl_do_reloc (struct elf_resolve *tpnt,struct r_scope_elem *scope,
 				     _dl_progname, strtab + symtab[symtab_index].st_name);
 			_dl_exit (1);
 		}
-		symbol_tpnt = sym_ref.tpnt;
 	}
 	old_val = *reloc_addr;
 	sym_val = symbol_addr + reloc_addend;
@@ -192,8 +199,24 @@ _dl_do_reloc (struct elf_resolve *tpnt,struct r_scope_elem *scope,
 		*reloc_addr = sym_val;
 		break;
 	case R_C6000_DSBT_INDEX:
-		new_val = (old_val & ~0x007fff00) | ((symbol_tpnt->dsbt_index & 0x7fff) << 8);
-		*reloc_addr = new_val;
+		/* If dsbt index is not yet set (0), set it to the proposed value */
+		new_val = (old_val & ~0x007fff00) | ((tpnt->loadaddr.map->dsbt_index & 0x7fff) << 8);
+		old_val = atomic_compare_and_exchange_val_acq(reloc_addr, new_val, old_val & ~0x007fff00);
+		dsbt_idx =(old_val & 0x007fff00) >> 8;
+
+		/*
+		 * If current relocated dsbt_idx is different from the
+		 * requested one, update it.
+		 */
+		if ((dsbt_idx != 0) && (dsbt_idx != tpnt->loadaddr.map->dsbt_index)) {
+			tpnt->loadaddr.map->dsbt_index = dsbt_idx;
+
+			_dl_if_debug_dprint("dsbt index already set to %d at reloc_addr = %x\n",
+					    tpnt->loadaddr.map->dsbt_index, reloc_addr);
+
+			/* Setup dsbt slot for this module in dsbt of all modules */
+			_dl_adjust_dsbt_modules(tpnt, dsbt_idx);
+		}
 		break;
 	case R_C6000_ABS_L16:
 		new_val = (old_val & ~0x007fff80) | ((sym_val & 0xffff) << 7);
@@ -291,3 +314,49 @@ _dl_parse_copy_information
 	return 0;
 }
 
+#if defined(USE_TLS) && USE_TLS
+#include <tls.h>
+/*
+ * Since we do not have a fixed user space address for user helper on
+ * every C6x devices, we have to get and store in a global variable the user helper
+ * address in which we can get the TLS value.
+ */
+
+static unsigned long *__user_helper_addr = 0;
+
+unsigned long
+__get_thread_pointer(void)
+{
+	if (unlikely(__user_helper_addr == 0)) {
+		unsigned long res;
+		INTERNAL_SYSCALL_DECL (err);
+		res = INTERNAL_SYSCALL (get_user_helper, err, 0);
+		if (unlikely(INTERNAL_SYSCALL_ERROR_P (res, err))) {
+			return 0;
+		}
+		__user_helper_addr = (unsigned long *) res;
+	}
+	return *__user_helper_addr;
+}
+
+char *
+__init_thread_pointer(unsigned long tp)
+{
+	long result_var;
+
+	INTERNAL_SYSCALL_DECL (err);
+
+	if (unlikely(__user_helper_addr == 0)) {
+		unsigned long res;
+		INTERNAL_SYSCALL_DECL (err);
+		res = INTERNAL_SYSCALL (get_user_helper, err, 0);
+		if (unlikely(INTERNAL_SYSCALL_ERROR_P (res, err))) {
+			return "cannot get user helper";
+		}
+		__user_helper_addr = (unsigned long *) res;
+	}
+
+	result_var = INTERNAL_SYSCALL (set_tls, err, 1, tp);
+	return (INTERNAL_SYSCALL_ERROR_P (result_var, err) ? "unknown error" : NULL);
+}
+#endif
