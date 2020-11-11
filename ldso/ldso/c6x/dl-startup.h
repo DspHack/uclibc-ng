@@ -105,6 +105,14 @@ struct elf32_dsbt_loadmap;
 	  _dl_exit(1);							\
 	}
 
+#if defined(__NR_cache_sync)
+extern void __c6x_cache_sync(unsigned long start, unsigned long end)
+{
+	cache_sync((void *) start, (void *) end); 
+}
+
+#elif defined(__NR_cacheflush)
+
 extern void __c6x_cache_sync(unsigned long start, unsigned long end)
 {
 	if (start > end)
@@ -113,3 +121,5 @@ extern void __c6x_cache_sync(unsigned long start, unsigned long end)
 	/* Use the cacheflush syscall */
 	cacheflush((void *) start, end - start, 0);
 }
+
+#endif 
