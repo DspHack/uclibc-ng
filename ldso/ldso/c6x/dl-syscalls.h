@@ -8,6 +8,10 @@
 static __always_inline _syscall3 (int, cacheflush, void *, start, const int, nbytes, const int, flags);
 #endif
 
+#ifdef __NR_cache_sync
+static __always_inline _syscall2 (int, cache_sync, void *, start, void *, end);
+#endif
+
 #ifdef __NR_dsbt_idx_alloc
 static __always_inline _syscall4 (int, dsbt_idx_alloc, const char *, name, unsigned long, start, unsigned long, end, unsigned long, op);
 #endif
